@@ -15,7 +15,8 @@ class Config:
 
     # MongoDB configuration
     MONGODB_URL: str = os.getenv("MONGODB_URL", "mongodb://localhost:27017")
-    MONGODB_DATABASE: str = os.getenv("MONGODB_DATABASE", "kasdi")
+    MONGODB_DATABASE_KSD: str = os.getenv("MONGODB_DATABASE_KSD", "ksd")
+    MONGODB_DATABASE_KASDI: str = os.getenv("MONGODB_DATABASE_KASDI", "kasdi")
 
     # Pinecone vector store configuration
     PINECONE_API_KEY: str = os.getenv("PINECONE_API_KEY")

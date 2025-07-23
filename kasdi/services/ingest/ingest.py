@@ -4,7 +4,7 @@ from dependencies import (
     initialize_dependencies,
 )
 
-from databases.models import Book, Author
+from databases.models.ksd import Book, Author
 
 
 from core.logger import create_scoped_logger

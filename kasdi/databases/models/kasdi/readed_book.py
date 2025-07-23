@@ -1,0 +1,19 @@
+from beanie import Document, Link
+from bson import ObjectId
+from pydantic import Field
+from datetime import datetime
+from typing import Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .user import User
+
+
+class ReadedBook(Document):
+    class Settings:
+        name = "readed_books"
+
+    user: Link["User"]
+    book_id: ObjectId
+
+    notes: Optional[str] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
