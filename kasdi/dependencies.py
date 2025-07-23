@@ -1,14 +1,9 @@
-from databases.relation_db import DatabaseManager
+from databases.client import init_db
 from services.vector_store import AsyncPineconeManagerFactory
 
 from core.configs import get_config
 
 configs_obj = get_config()
-
-
-mysql_database_manager = DatabaseManager(
-    conection_string=configs_obj.MYSQL_DATABASE_URL,
-)
 
 
 from langchain_openai import OpenAIEmbeddings
@@ -24,5 +19,5 @@ async def initialize_dependencies():
     """
     Initialize all dependencies.
     """
-    await mysql_database_manager.connect()
+    await init_db()
     await pinecone_manager.connect()

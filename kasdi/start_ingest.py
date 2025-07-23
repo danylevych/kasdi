@@ -2,7 +2,6 @@ from services.ingest import ingest_data
 from dependencies import (
     initialize_dependencies,
     pinecone_manager,
-    mysql_database_manager,
 )
 
 async def main():
@@ -18,7 +17,6 @@ async def main():
 
     finally:
         await pinecone_manager.close()
-        await mysql_database_manager.close_connection()
 
 
 if __name__ == "__main__":
