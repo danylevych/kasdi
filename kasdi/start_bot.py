@@ -9,7 +9,7 @@ from bot.bot import start
 async def main():
     await initialize_dependencies()
     config = get_config()
-    await start(token=config.BOT_TOKEN)
+    await start(token=config.TELEGRAM_BOT_TOKEN)
 
 
 if __name__ == "__main__":
