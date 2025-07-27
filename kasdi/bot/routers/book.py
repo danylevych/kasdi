@@ -1,4 +1,4 @@
-from aiogram import Router, types
+from aiogram import Router, types, Bot
 from aiogram.types import Message
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
@@ -7,7 +7,7 @@ from aiogram.types import (
     InlineKeyboardButton,
 )
 
-from ..filters.book import (
+from bot.filters.book import (
     ShowReadedBooksFilter,
     DeleteReadedBookCallback,
     AddReadedBookCallback,
@@ -16,6 +16,10 @@ from ..filters.book import (
     CancelAddingBooksCallback,
 )
 
+from bot.types import BookCreateMessage
+from bot.utils import BookMessagesParser
+
+from core.configs import get_config
 from controllers import (
     user_controller,
     readed_book_controller,
@@ -25,7 +29,6 @@ from controllers import (
 router = Router(
     name="book",
 )
-
 
 
 class BookInput(StatesGroup):
@@ -113,7 +116,7 @@ async def delete_book(callback: types.CallbackQuery):
 
 @router.callback_query(AddReadedBookCallback())
 async def start_book_session(callback: types.CallbackQuery, state: FSMContext):
-    await callback.message.edit_reply_markup(reply_markup=None)
+    await callback.message.delete()
 
     await state.set_state(BookInput.collecting)
     await state.update_data(entries=[], last_prompt_id=None)
@@ -155,13 +158,8 @@ async def collect_entries(message: Message, state: FSMContext):
             pass
 
     entries = data["entries"]
-    entry = {
-        "text": message.text or "",
-        "photos": [p.file_id for p in message.photo] if message.photo else [],
-        "document": message.document.file_id if message.document else None,
-    }
+    entries.append(BookCreateMessage.from_message(message))
 
-    entries.append(entry)
     await state.update_data(entries=entries)
 
     prompt = await message.answer(
@@ -175,21 +173,26 @@ async def collect_entries(message: Message, state: FSMContext):
 @router.callback_query(SaveAllReadedBooksCallback(), BookInput.collecting)
 async def save_all_books(callback: types.CallbackQuery, state: FSMContext):
     user = await user_controller.get_user_by_tg_id(callback.from_user.id)
+
     if not user:
         await callback.answer("Користувача не знайдено.", show_alert=True)
         await state.clear()
         return
 
+    readed_books = await readed_book_controller.get_readed_books_by_user_id(user.id)
+
     data = await state.get_data()
     entries = data.get("entries", [])
-    created = 0
-    for e in entries:
-        rb = readed_book_controller.ReadedBook(user=user, title=e["text"])
-        await readed_book_controller.create_readed_book(rb)
-        created += 1
+
+    readed_books = await BookMessagesParser(callback.message.bot, get_config().OPENAI_API_KEY).parse(
+        messages=entries,
+        actual_readed_books=readed_books
+    )
+
+    created = await readed_book_controller.create_readed_books(readed_books, user.id)
 
     await callback.message.edit_reply_markup(None)
-    await callback.message.answer(f"✅ Збережено {created} записів.")
+    await callback.message.answer(f"✅ Збережено {len(created)} записів.")
     await state.clear()
     await callback.answer()
 

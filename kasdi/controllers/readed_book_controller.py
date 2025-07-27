@@ -42,6 +42,21 @@ async def create_readed_book(readed_book: ReadedBook) -> ReadedBook:
     return readed_book
 
 
+async def create_readed_books(readed_books: List[ReadedBook], user_id: str) -> List[ReadedBook]:
+    """
+    Create multiple read book entries in the database.
+
+    :param readed_books: List of ReadedBook objects to be created.
+    :param user_id: The ID of the user who owns these read books.
+    :return: List of created ReadedBook objects.
+    """
+    for book in readed_books:
+        book.user = ObjectId(user_id)
+        await book.save()
+
+    return readed_books
+
+
 async def delete_readed_book(
         user_id: Optional[str] = None,
         user_tg_id: Optional[int] = None,

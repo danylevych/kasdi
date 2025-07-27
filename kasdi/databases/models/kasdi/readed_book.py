@@ -21,5 +21,6 @@ class ReadedBook(Document):
     ksd_book_id: Optional[ObjectId] = None
 
     title: str
+    author: Optional[str] = None
     notes: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
