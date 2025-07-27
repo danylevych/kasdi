@@ -1,14 +1,17 @@
 from aiogram import Bot, Dispatcher
 
-from .routers.comands import router
+from .routers.comands import router as commands_router
+from .routers.profile import router as profile_router
+from .routers.book    import router as book_router
 
 
 async def start(token: str):
     print("Bot is starting...")
 
-    bot = Bot(token=token)
-
     dp = Dispatcher()
-    dp.include_router(router)
 
-    await dp.start_polling(bot)
+    dp.include_router(commands_router)
+    dp.include_router(profile_router)
+    dp.include_router(book_router)
+
+    await dp.start_polling(Bot(token=token))

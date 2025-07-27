@@ -9,11 +9,17 @@ if TYPE_CHECKING:
 
 
 class ReadedBook(Document):
+
+    model_config = {
+        "arbitrary_types_allowed": True
+    }
+
     class Settings:
         name = "readed_books"
 
     user: Link["User"]
-    book_id: ObjectId
+    ksd_book_id: Optional[ObjectId] = None
 
+    title: str
     notes: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)

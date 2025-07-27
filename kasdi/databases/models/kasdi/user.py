@@ -8,6 +8,11 @@ if TYPE_CHECKING:
 
 
 class User(Document):
+
+    model_config = {
+        "arbitrary_types_allowed": True
+    }
+
     class Settings:
         name = "users"
 
