@@ -1,10 +1,15 @@
 from beanie import Document, Indexed, BackLink
-from pydantic import Field
+from pydantic import BaseModel, Field
 from datetime import datetime
 from typing import List, Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .readed_book import ReadedBook
+
+
+class MemoryItem(BaseModel):
+    content: str
+    created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
 class User(Document):
@@ -22,6 +27,7 @@ class User(Document):
 
     custom_instruction: Optional[str] = None
     memory_enabled: bool = True
+    memory: Optional[List[MemoryItem]] = None
 
     readed_books: List[BackLink["ReadedBook"]] = Field(
         default_factory=list,

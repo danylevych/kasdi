@@ -9,6 +9,7 @@ from aiogram.types import (
 from controllers import (
     user_controller,
 )
+from controllers import chat_controller
 
 
 
@@ -47,3 +48,24 @@ async def start_handler(message: Message):
     )
 
     await message.answer(greeting, reply_markup=keyboard)
+
+
+@router.message()
+async def handle_user_message(message: Message):
+    user = await user_controller.get_user_by_tg_id(message.from_user.id)
+
+    if not user:
+        await message.answer("Будь ласка, спочатку почніть розмову з ботом командою /start.")
+        return
+
+    chat = await chat_controller.get_or_create_tg_chat(user.id, message.chat.id)
+
+    await chat_controller.add_message_to_chat(
+        chat=chat,
+        message=chat_controller.Message(
+            role=chat_controller.Role.USER,
+            content=message.text
+        )
+    )
+
+    await message.answer("Ваше повідомлення збережено. Як я можу допомогти далі?")

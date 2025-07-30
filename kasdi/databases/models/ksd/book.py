@@ -6,6 +6,7 @@ from bson import ObjectId
 
 
 class Book(Document):
+
     title: str
     author_id: ObjectId
     url: str = Indexed(str, unique=True)
@@ -29,6 +30,7 @@ class Book(Document):
 
     translators: Optional[str] = None
 
+    embedding: Optional[list[float]] = None
     model_config = {
         "arbitrary_types_allowed": True
     }
