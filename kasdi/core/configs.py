@@ -24,6 +24,13 @@ class Config:
 
     # OpenAI API key for embeddings
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY")
+    EMBEDDINGS_MODEL: str = os.getenv("EMBEDDINGS_MODEL", "text-embedding-3-small")
+
+    # Tavily API key for web search
+    TAVILY_API_KEY: str = os.getenv("TAVILY_API_KEY")
+
+    # FireCrawl API key for web crawling
+    FIRE_CRAWL_API_KEY: str = os.getenv("FIRE_CRAWL_API_KEY")
 
     # Telegram Bot configuration
     TELEGRAM_BOT_TOKEN: str = os.getenv("TELEGRAM_BOT_TOKEN")

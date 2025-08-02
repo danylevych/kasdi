@@ -40,7 +40,6 @@ async def prepare_memory(user: User) -> str:
     if user.memory_enabled is False:
         return "Memory is disabled for this user."
 
-
     if not user.memory:
         return "We do not have any memory for this user."
 
@@ -92,9 +91,21 @@ async def run_kasdi(
         memory=memory,
     )
 
+    from .tools import (
+        MemoryTool,
+        SearchBooksByQueryTool,
+        WebScrapeTool,
+        web_search,
+    )
+
     tools = [
-        # Define any tools you want to include
+        SearchBooksByQueryTool(),
+        WebScrapeTool(),
+        web_search,
     ]
+
+    if user.memory_enabled:
+        tools.append(MemoryTool(user_id=str(user.id)))
 
     llm = ChatOpenAI(
         model="gpt-4o-mini",
@@ -103,7 +114,6 @@ async def run_kasdi(
     )
 
     chat_history = await get_chat_history(chat_id)
-
 
     kasdi = create_react_agent(
         llm=llm,

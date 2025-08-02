@@ -1,5 +1,5 @@
 from typing import Optional
-from databases.models.kasdi import User
+from databases.models.kasdi import User, MemoryItem
 
 
 async def get_user_by_id(user_id: str) -> Optional[User]:
@@ -37,5 +37,27 @@ async def update_user(user: User) -> User:
     :param user: The User object with updated information.
     :return: The updated User object.
     """
+    await user.save()
+    return user
+
+
+async def add_user_memory(user: User | str, content: str) -> User:
+    """
+    Add a memory item to the user's memory.
+
+    :param user: The User object to update.
+    :param content: The content to store in memory.
+    :return: The updated User object with the new memory item.
+    """
+    if isinstance(user, str):
+        user = await get_user_by_id(user)
+
+    if not user:
+        raise ValueError("User not found.")
+
+    if not user.memory_enabled:
+        raise ValueError("Memory is disabled for this user.")
+
+    user.memory.append(MemoryItem(content=content))
     await user.save()
     return user

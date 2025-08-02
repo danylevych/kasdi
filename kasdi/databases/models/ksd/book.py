@@ -6,7 +6,6 @@ from bson import ObjectId
 
 
 class Book(Document):
-
     title: str
     author_id: ObjectId
     url: str = Indexed(str, unique=True)
