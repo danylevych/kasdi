@@ -32,6 +32,10 @@ class Config:
     # FireCrawl API key for web crawling
     FIRE_CRAWL_API_KEY: str = os.getenv("FIRE_CRAWL_API_KEY")
 
+    # LLM configuration
+    LLM_MODEL: str = os.getenv("LLM_MODEL", "gpt-4o-mini")
+    LLM_TEMPERATURE: float = float(os.getenv("LLM_TEMPERATURE", "0.5"))
+
     # Telegram Bot configuration
     TELEGRAM_BOT_TOKEN: str = os.getenv("TELEGRAM_BOT_TOKEN")
     TELEGRAM_WEBHOOK_URL: str = os.getenv("TELEGRAM_WEBHOOK_URL", "")

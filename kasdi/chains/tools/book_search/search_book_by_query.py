@@ -25,7 +25,11 @@ class SearchBooksByQueryTool(BaseTool):
 
     _embeddings: OpenAIEmbeddings = PrivateAttr()
 
-    def __init__(self, embedding_model: str, openai_api_key: str, **kargs: Any):
+    def __init__(self,
+                 openai_api_key: str,
+                 embedding_model: str = "text-embedding-3-small",
+                 **kargs: Any
+                ):
         super().__init__(**kargs)
         self._embeddings = OpenAIEmbeddings(
             model=embedding_model,

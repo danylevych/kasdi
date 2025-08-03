@@ -1,10 +1,11 @@
 from typing import List
+from datetime import datetime
 from beanie import PydanticObjectId
 from langgraph.prebuilt import create_react_agent
 from langchain_openai import ChatOpenAI
 from langchain.prompts import PromptTemplate
 from langchain_core.chat_history import BaseChatMessageHistory
-from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
+from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, ToolMessage
 
 from databases.models.kasdi import Chat, Message, Role, User
 from langchain.memory import ConversationBufferMemory
@@ -31,10 +32,10 @@ async def prepare_readed_books(user: User) -> str:
 
 
 async def prepare_user_instructions(user: User) -> str:
-    if not user.instructions:
+    if not user.custom_instruction:
         return "The user has no specific instructions."
 
-    return user.instructions
+    return user.custom_instruction
 
 async def prepare_memory(user: User) -> str:
     if user.memory_enabled is False:
@@ -81,7 +82,13 @@ async def run_kasdi(
 
     system_prompt = PromptTemplate(
         template=read_prompt("kasdi_prompt.md"),
-        input_variables=["user_name", "user_instructions", "users_books", "memory"],
+        input_variables=[
+            "user_name",
+            "user_instructions",
+            "users_books",
+            "memory",
+            "date",
+        ],
     )
 
     system_message = system_prompt.format(
@@ -89,6 +96,7 @@ async def run_kasdi(
         user_instructions=user_instructions,
         users_books=users_books,
         memory=memory,
+        date=datetime.now().strftime("%Y-%m-%d"),
     )
 
     from .tools import (
@@ -108,18 +116,20 @@ async def run_kasdi(
         tools.append(MemoryTool(user_id=str(user.id)))
 
     llm = ChatOpenAI(
-        model="gpt-4o-mini",
-        temperature=0.7,
+        model="gpt-4o",
+        temperature=0.5,
         api_key=api_key,
     )
 
     chat_history = await get_chat_history(chat_id)
 
     kasdi = create_react_agent(
-        llm=llm,
-        system_message=system_message,
+        model=llm,
+        prompt=system_message,
         tools=tools,
     )
+
+    print(system_message)
 
     response = await kasdi.ainvoke(
             {"messages": chat_history},
@@ -127,19 +137,3 @@ async def run_kasdi(
         )
 
     return response
-
-
-if __name__ == "__main__":
-    import os
-    from dotenv import load_dotenv
-    load_dotenv()
-    api_key = os.getenv("OPENAI_API_KEY")
-
-    async def main():
-        user_id = PydanticObjectId("688281877385e4918dcaaef2")  # Example user ID
-        chat_id = PydanticObjectId("60c72b2f9b1e8d001c8e4f3b")  # Example chat ID
-        response = await run_kasdi(api_key, user_id, chat_id)
-        print(response)
-
-    import asyncio
-    asyncio.run(main())
