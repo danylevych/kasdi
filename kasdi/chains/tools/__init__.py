@@ -1,3 +1,12 @@
 from .memory import MemoryTool
-from .search_books import SearchBooksByQueryTool
-from .web_tools import WebScrapeTool, web_search
+from .web_tools import WebScrapeTool, WebSearchTool
+from .book_search import SearchBooksTool, SearchBooksByQueryTool
+
+
+__all__ = [
+    "MemoryTool",
+    "WebScrapeTool",
+    "WebSearchTool",
+    "SearchBooksTool",
+    "SearchBooksByQueryTool",
+]

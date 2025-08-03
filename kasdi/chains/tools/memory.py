@@ -1,15 +1,13 @@
+from typing import Type
 from langchain_core.tools import BaseTool
-from typing import Dict, Any, Optional, Type
 from pydantic import BaseModel, Field, PrivateAttr
 
-
-
-from databases.models.kasdi import User, MemoryItem
+from databases.models.kasdi import User
 from controllers import user_controller
 
 
 class MemoryArgs(BaseModel):
-    content = Field(
+    content: str = Field(
         ...,
         description="Information to store in memory.",
     )

@@ -1,20 +1,13 @@
-from langchain_tavily import TavilySearch
+from langchain_tavily import TavilySearch as WebSearchTool
 from langchain_community.document_loaders import FireCrawlLoader
 from langchain_core.tools import BaseTool
-from pydantic import BaseModel, Field, PrivateAttr
-from typing import Dict, Any, Optional, Type
+from pydantic import BaseModel, Field
+from typing import Type
 
 from dependencies import get_config
 
-
-web_search = TavilySearch(
-    tavily_api_key=get_config().TAVILY_API_KEY,
-    max_results=5,
-)
-
-
-class WebSearchToolArgs(BaseTool):
-    url = Field(
+class WebSearchToolArgs(BaseModel):
+    url: str = Field(
         ...,
         description="The URL to search for.",
     )
@@ -29,7 +22,7 @@ class WebScrapeTool(BaseTool):
         """
         Asynchronously scrape the content of the given URL.
         """
-        loader = FireCrawlLoader(urls=[url], api_key=get_config().FIRE_CRAWL_API_KEY, mode='scrape')
+        loader = FireCrawlLoader(url=[url], api_key=get_config().FIRE_CRAWL_API_KEY, mode='scrape')
         documents = await loader.aload()
         if not documents:
             return f"No content found at {url}"
@@ -40,7 +33,7 @@ class WebScrapeTool(BaseTool):
         """
         Scrape the content of the given URL.
         """
-        loader = FireCrawlLoader(urls=[url], api_key=get_config().FIRE_CRAWL_API_KEY, mode='scrape')
+        loader = FireCrawlLoader(url=[url], api_key=get_config().FIRE_CRAWL_API_KEY, mode='scrape')
         documents = loader.load()
         if not documents:
             return f"No content found at {url}"
