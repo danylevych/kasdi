@@ -58,6 +58,9 @@ async def add_user_memory(user: User | str, content: str) -> User:
     if not user.memory_enabled:
         raise ValueError("Memory is disabled for this user.")
 
+    if not user.memory:
+        user.memory = []
+
     user.memory.append(MemoryItem(content=content))
     await user.save()
     return user
