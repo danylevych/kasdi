@@ -1,5 +1,5 @@
 from langchain_tavily import TavilySearch as WebSearchTool
-from langchain_community.document_loaders import FireCrawlLoader
+from firecrawl import FirecrawlApp, AsyncFirecrawlApp
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field, PrivateAttr
 from typing import Type
@@ -27,20 +27,32 @@ class WebScrapeTool(BaseTool):
         """
         Asynchronously scrape the content of the given URL.
         """
-        loader = FireCrawlLoader(url=[url], api_key=self._api_key, mode='scrape')
-        documents = await loader.aload()
-        if not documents:
-            return f"No content found at {url}"
+        try:
+            app = AsyncFirecrawlApp(api_key=self._api_key)
+            res = await app.scrape_url(url, formats=["markdown"])
+            return res.markdown or res.html or "No content"
 
-        return "\n".join(doc.page_content for doc in documents)
+        except Exception as e:
+            return f"Error scraping URL: {e}"
+
 
     def _run(self, url: str) -> str:
         """
         Scrape the content of the given URL.
         """
-        loader = FireCrawlLoader(url=[url], api_key=self._api_key, mode='scrape')
-        documents = loader.load()
-        if not documents:
-            return f"No content found at {url}"
+        try:
+            app = FirecrawlApp(api_key=self._api_key)
+            res = app.scrape_url(url, formats=["markdown"])
+            return res.markdown or res.html or "No content"
 
-        return "\n".join(doc.page_content for doc in documents)
+        except Exception as e:
+            return f"Error scraping URL: {e}"
+
+
+if __name__ == "__main__":
+    # Example usage
+    from dependencies import get_config
+    tool = WebScrapeTool(api_key=get_config().FIRE_CRAWL_API_KEY)
+
+    result = tool._run(url="https://itc.ua/en/articles/babel-or-the-necessity-of-violence-rebecca-kwan-an-alternative-history-fantasy-about-the-power-of-words-and-the-importance-of-language/")
+    print(result)

@@ -17,7 +17,7 @@ from bot.filters.book import (
 )
 
 from bot.types import BookCreateMessage
-from bot.utils import BookMessagesParser
+from bot.parsers.book_parser import BookMessagesParser
 
 from core.configs import get_config
 from controllers import (
