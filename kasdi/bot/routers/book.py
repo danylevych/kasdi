@@ -186,10 +186,10 @@ async def save_all_books(callback: types.CallbackQuery, state: FSMContext):
 
     readed_books = await BookMessagesParser(callback.message.bot, get_config().OPENAI_API_KEY).parse(
         messages=entries,
-        actual_readed_books=readed_books
+        user=user,
     )
 
-    created = await readed_book_controller.create_readed_books(readed_books, user.id)
+    created = await readed_book_controller.create_readed_books(readed_books, user)
 
     await callback.message.edit_reply_markup(None)
     await callback.message.answer(f"✅ Збережено {len(created)} записів.")

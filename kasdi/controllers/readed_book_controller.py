@@ -1,8 +1,9 @@
 from beanie.operators import Eq
+from beanie import Link
 from typing import List, Optional
 
 from bson import ObjectId
-from databases.models.kasdi import ReadedBook
+from databases.models.kasdi import ReadedBook, User
 from controllers import user_controller
 
 
@@ -42,7 +43,7 @@ async def create_readed_book(readed_book: ReadedBook) -> ReadedBook:
     return readed_book
 
 
-async def create_readed_books(readed_books: List[ReadedBook], user_id: str) -> List[ReadedBook]:
+async def create_readed_books(readed_books: List[ReadedBook], user: User) -> List[ReadedBook]:
     """
     Create multiple read book entries in the database.
 
@@ -51,7 +52,15 @@ async def create_readed_books(readed_books: List[ReadedBook], user_id: str) -> L
     :return: List of created ReadedBook objects.
     """
     for book in readed_books:
-        book.user = ObjectId(user_id)
+        existing_books = await ReadedBook.find(
+            Eq(ReadedBook.user.id, user.id),
+            Eq(ReadedBook.title, book.title)
+        ).to_list()
+
+        if existing_books:
+            continue
+
+        book.user = user
         await book.save()
 
     return readed_books

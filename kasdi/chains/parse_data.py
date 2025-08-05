@@ -39,15 +39,15 @@ class ParseBookDataChain:
             template=read_prompt("parse_prompt.md")
         )
 
-    async def arun(self, actual_books: str, human_message: HumanMessage) -> BookDataList:
+    async def arun(self, human_message: HumanMessage) -> BookDataList:
         messages = [
-            SystemMessage(content=self.system_prompt.format(actual_books=actual_books)),
+            SystemMessage(content=self.system_prompt.format()),
             human_message
         ]
 
-        response = await self.llm.ainvoke(messages, tools=[{"type": "web_search_preview"}])
-        return self.output_parser.parse(response.content)
-
+        chain = self.llm | self.output_parser
+        response = await chain.ainvoke(messages, tools=[{"type": "web_search_preview"}])
+        return response
 
 if __name__ == "__main__":
     import os
@@ -56,12 +56,11 @@ if __name__ == "__main__":
     api_key = os.getenv("OPENAI_API_KEY")
 
     chain = ParseBookDataChain(api_key=api_key)
-    print(chain.system_prompt.format(actual_books="Some example books data"))
+    print(chain.system_prompt.format())
 
     import asyncio
     async def main():
         response = await chain.arun(
-            actual_books="Some example books data",
             human_message=HumanMessage(content="I read 'The Great Gatsby' by F. Scott Fitzgerald and I loved it!")
         )
         print(response)
