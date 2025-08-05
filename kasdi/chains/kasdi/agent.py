@@ -18,6 +18,18 @@ from .chat_service import ChatService
 
 from chains.utils import read_prompt
 
+from tenacity import (
+    retry,
+    wait_exponential,
+    stop_after_attempt,
+    retry_if_exception_type,
+)
+
+from core.logger import create_scoped_logger
+
+
+logger = create_scoped_logger("kasdi.agent")
+
 
 class KasdiConfigs(BaseModel):
     OPENAI_API_KEY     : str
@@ -96,6 +108,7 @@ class KasdiAgent:
         ]
 
         if user.memory_enabled:
+            logger.info(f"Memory is enabled for user {user.id}, adding MemoryTool")
             tools.append(MemoryTool(user_id=str(user.id)))
 
         return tools
@@ -116,9 +129,15 @@ class KasdiAgent:
             tools=tools,
         )
 
-
+    @retry(  # Retry on any exception
+        wait=wait_exponential(multiplier=1, min=4, max=10),
+        stop=stop_after_attempt(5),
+        retry=retry_if_exception_type(Exception)
+    )
     async def execute(self, user_id: PydanticObjectId, chat_id: PydanticObjectId) -> str:
         """Execute the agent conversation."""
+        logger.info(f"Executing Kasdi agent for user {user_id} in chat {chat_id}")
+
         user = await user_controller.get_user_by_id(user_id)
         if not user:
             raise ValueError("User not found")
@@ -128,12 +147,12 @@ class KasdiAgent:
         system_message = self._build_system_prompt(user_context)
         agent = self._build_react_agent(user, system_message)
 
-        print(system_message)
-
         response = await agent.ainvoke(
             {"messages": chat_history},
             {"configurable": {"thread_id": str(chat_id)}},
         )
+
+        logger.info(f"Agent response DONE for user {user_id} in chat {chat_id}")
 
         return response
 
