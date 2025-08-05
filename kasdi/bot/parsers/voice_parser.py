@@ -65,21 +65,6 @@ class VoiceParser:
         self.timeout = timeout
         self.max_duration = max_duration
 
-    async def _download_voice_file(self, message: Message) -> bytes:
-        """Download voice file from Telegram with validation."""
-        try:
-            file_info = await message.bot.get_file(message.voice.file_id)
-
-            if file_info.file_size and file_info.file_size > self.max_file_size:
-                raise FileSizeError(f"File size {file_info.file_size} exceeds limit {self.max_file_size}")
-
-            downloaded_file = await message.bot.download_file(file_info.file_path)
-            return downloaded_file.read()
-
-        except Exception as e:
-            logger.error(f"Failed to download voice file {message.voice.file_id}: {e}")
-            raise VoiceProcessingError(f"Download failed: {e}")
-
     async def _convert_audio_to_mp3(self, ogg_data: bytes, temp_dir: str) -> str:
         """Convert OGG audio data to MP3 format asynchronously."""
         try:
@@ -122,25 +107,19 @@ class VoiceParser:
             logger.error(f"Failed to transcribe audio: {e}")
             raise TranscriptionError(f"Transcription failed: {e}")
 
-    async def process_voice_message(self, message: Message) -> Optional[str]:
+    async def run(self, ogg_data: bytes) -> Optional[str]:
         """
         Process voice message and return transcribed text.
 
         :param message: Telegram message with voice attachment
         :return: Transcribed text or None if processing fails
         """
-        if not message.voice:
-            return None
-
         temp_dir = None
 
         try:
             temp_dir = tempfile.mkdtemp(prefix="voice_")
 
             async with asyncio.timeout(self.timeout):
-                logger.info(f"Downloading voice file {message.voice.file_id}")
-                ogg_data = await self._download_voice_file(message)
-
                 logger.info("Converting audio to MP3 format")
                 mp3_path = await self._convert_audio_to_mp3(ogg_data, temp_dir)
 
@@ -193,6 +172,36 @@ async def process_voice_message(message: Message) -> Optional[str]:
     Returns:
         Transcribed text or None if processing fails
     """
-    return await _default_parser.process_voice_message(message)
 
+    async def download_voice_file(message: Message) -> bytes:
+        """Download voice file from Telegram with validation."""
+        if not message.voice:
+            raise ValueError("Message does not contain a voice attachment")
 
+        file_info = await message.bot.get_file(message.voice.file_id)
+        file_size = file_info.file_size
+
+        if file_size > _default_parser.max_file_size:
+            raise FileSizeError(f"File size {file_size} exceeds limit {_default_parser.max_file_size}")
+
+        voice_data = await message.bot.download_file(file_info.file_path)
+
+        if not voice_data:
+            raise ValueError("Failed to download voice data")
+
+        # Convert BytesIO to bytes
+        if hasattr(voice_data, 'read'):
+            return voice_data.read()
+
+        return voice_data
+
+    if not message.voice:
+        logger.warning("No voice message found in the provided message")
+        return None
+
+    try:
+        ogg_data = await download_voice_file(message)
+        return await _default_parser.run(ogg_data)
+    except Exception as e:
+        logger.error(f"Failed to process voice message {message.voice.file_id}: {e}")
+        return None

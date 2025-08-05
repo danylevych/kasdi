@@ -7,6 +7,8 @@ from bot.types import BookCreateMessage
 from databases.models.kasdi import ReadedBook, User
 from chains.parse_data import ParseBookDataChain, BookDataList
 
+from .voice_parser import VoiceParser
+
 from core.logger import create_scoped_logger
 
 
@@ -50,7 +52,7 @@ class BookMessagesParser:
 
             if message.photos:
                 for photo in message.photos:
-                    photo_info = await self.bot.get_file(photo)
+                    photo_info = await self.bot.get_file(photo.file_id)
                     photo_data = await self.bot.download_file(photo_info.file_path)
 
                     image_url = f"data:image/{photo_info.file_path.split('.')[-1]};base64,{decode_photo(photo_data)}"
@@ -61,6 +63,30 @@ class BookMessagesParser:
                             "url": image_url
                         }
                     })
+
+                    if photo.caption:
+                        human_message.content.append({
+                            "type": "text",
+                            "text": photo.caption
+                        })
+
+            if message.voice:
+                from core.configs import get_config
+
+                voice_info = await self.bot.get_file(message.voice)
+                voice_data = await self.bot.download_file(voice_info.file_path)
+
+                voice_parser = VoiceParser(
+                    api_key=get_config().OPENAI_API_KEY,
+                    language="uk"
+                )
+
+                transcription = await voice_parser.run(voice_data.read())
+
+                human_message.content.append({
+                    "type": "text",
+                    "text": transcription
+                })
 
         return human_message
 

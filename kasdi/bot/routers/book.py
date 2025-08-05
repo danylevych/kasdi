@@ -64,6 +64,8 @@ async def readed_books_handler(message: types.Message):
     if not books:
         await message.answer("📚 У тебе ще немає прочитаних книг.")
 
+    else:
+        await message.answer("<b>📚 Ось список твоїх прочитаних книг:</b>", parse_mode="HTML")
 
     for book in books:
         kb = InlineKeyboardMarkup(inline_keyboard=[
@@ -80,6 +82,9 @@ async def readed_books_handler(message: types.Message):
             ]
         ])
         text = f"📖 <b>{book.title}</b>"
+
+        if book.author:
+            text += f"\n👤 <i>{book.author}</i>"
 
         if book.notes:
             text += f"\n📝 {book.notes}"
@@ -122,7 +127,7 @@ async def start_book_session(callback: types.CallbackQuery, state: FSMContext):
     await state.update_data(entries=[], last_prompt_id=None)
 
     prompt = await callback.message.answer(
-        "📚 Надішли мені записи про прочитані книги. Коли завершиш — просто збережи, я опрацюю їх )",
+        "📚 Надішли мені записи про прочитані книги (фото, текст, аудіо). Коли завершиш — просто збережи, я опрацюю їх )",
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[
                 [
