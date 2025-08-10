@@ -30,6 +30,77 @@ class SearchBooksTool(BaseTool):
 
     args_schema: Type[SearchBooksArgs] = SearchBooksArgs
 
+
+    async def find(
+        self,
+        author_name: Optional[str] = None,
+        title: Optional[str] = None,
+        book_series: Optional[str] = None,
+        publisher: Optional[str] = None,
+        genre: Optional[GenreEnum] = GenreEnum.ALL,
+        age_restriction: Optional[AgeRestrictionEnum] = AgeRestrictionEnum.ALL,
+        limit: int = 10,
+    ) -> List[Book]:
+        author_ids = []
+
+        if author_name:
+            authors = await self._search_authors(author_name)
+            if not authors:
+                return "No authors found matching the query."
+
+            author_ids = [author.id for author in authors]
+
+        # Search books by title and other filters
+        books = await self._search_books_by_title(
+            author_ids=author_ids,
+            title=title,
+            publisher=publisher,
+            genre=genre,
+            age_restriction=age_restriction,
+            book_series=book_series,
+            limit=limit,
+        )
+
+        return books
+
+    async def _arun(
+        self,
+        author_name: Optional[str] = None,
+        title: Optional[str] = None,
+        book_series: Optional[str] = None,
+        publisher: Optional[str] = None,
+        genre: Optional[GenreEnum] = GenreEnum.ALL,
+        age_restriction: Optional[AgeRestrictionEnum] = AgeRestrictionEnum.ALL,
+        limit: int = 10,
+    ) -> str:
+        """
+        Search books in the database with the provided filters.
+        """
+        # Run the search for authors
+        books = await self.find(
+            author_name=author_name,
+            title=title,
+            book_series=book_series,
+            publisher=publisher,
+            genre=genre,
+            age_restriction=age_restriction,
+            limit=limit,
+        )
+
+        if not books:
+            return "No books found matching the query."
+
+        for book in books:
+            author = await Author.find_one(Author.id == book["author_id"])
+            if author:
+                book["author"] = author.name
+
+        response = "Books found:\n\n"
+        for index, book in enumerate(books, start=1):
+            response += f"#{index}\n{book_formatter(book)}\n\n---\n\n"
+
+        return response.strip()
+
     def _run(
         self,
         author_name: Optional[str] = None,
@@ -52,54 +123,6 @@ class SearchBooksTool(BaseTool):
             age_restriction=age_restriction,
             limit=limit,
         ))
-
-    async def _arun(
-        self,
-        author_name: Optional[str] = None,
-        title: Optional[str] = None,
-        book_series: Optional[str] = None,
-        publisher: Optional[str] = None,
-        genre: Optional[GenreEnum] = GenreEnum.ALL,
-        age_restriction: Optional[AgeRestrictionEnum] = AgeRestrictionEnum.ALL,
-        limit: int = 10,
-    ) -> str:
-        """
-        Search books in the database with the provided filters.
-        """
-        # Run the search for authors
-        author_ids = []
-
-        if author_name:
-            authors = await self._search_authors(author_name)
-            if not authors:
-                return "No authors found matching the query."
-
-            author_ids = [author.id for author in authors]
-
-        # Search books by title and other filters
-        books = await self._search_books_by_title(
-            author_ids=author_ids,
-            title=title,
-            publisher=publisher,
-            genre=genre,
-            age_restriction=age_restriction,
-            book_series=book_series,
-            limit=limit,
-        )
-
-        if not books:
-            return "No books found matching the query."
-
-        for book in books:
-            author = await Author.find_one(Author.id == book["author_id"])
-            if author:
-                book["author"] = author.name
-
-        response = "Books found:\n\n"
-        for index, book in enumerate(books, start=1):
-            response += f"#{index}\n{book_formatter(book)}\n\n---\n\n"
-
-        return response.strip()
 
 
     async def _search_authors(self, author_name: str) -> List[Author]:

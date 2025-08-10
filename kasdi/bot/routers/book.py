@@ -1,5 +1,5 @@
 from aiogram import Router, types, Bot
-from aiogram.types import Message
+from aiogram.types import Message, LinkPreviewOptions
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.types import (
@@ -66,7 +66,7 @@ async def readed_books_handler(message: types.Message):
         await message.answer("Користувача не знайдено.")
         return
 
-    books = await readed_book_controller.get_readed_books_by_user_id(user.id)
+    books = await readed_book_controller.get_readed_books_by_user_id(user.id, attach_ksd_info=True)
 
     if not books:
         await message.answer("📚 У тебе ще немає прочитаних книг.")
@@ -74,12 +74,12 @@ async def readed_books_handler(message: types.Message):
     else:
         await message.answer("<b>📚 Ось список твоїх прочитаних книг:</b>", parse_mode="HTML")
 
-    for book in books:
+    for readed_book, ksd_book in books:
         kb = InlineKeyboardMarkup(inline_keyboard=[
             [
                 InlineKeyboardButton(
                     text="❌ Видалити",
-                    callback_data=f"delete_book:{str(book.id)}"
+                    callback_data=f"delete_book:{str(readed_book.id)}"
                 ),
                 # TODO: ADD EDIT BOOK CALLBACK
                 # InlineKeyboardButton(
@@ -88,16 +88,22 @@ async def readed_books_handler(message: types.Message):
                 # ),
             ]
         ])
-        text = f"📖 <b>{book.title}</b>"
+        text = f"📖 <b>{readed_book.title}</b>"
 
-        if book.author:
-            text += f"\n👤 <i>{book.author}</i>"
+        if readed_book.author:
+            text += f"\n👤 <i>{readed_book.author}</i>"
 
-        if book.notes:
-            text += f"\n📝 {book.notes}"
+        if readed_book.notes:
+            text += f"\n📝 {readed_book.notes}"
 
-        # TODO: FIND RELEVANT INFO ABOUT BOOK IN KDS DATABASE
-        await message.answer(text, reply_markup=kb, parse_mode="HTML")
+        if ksd_book:
+            text += f"\n🔗 <a href=\"{ksd_book.url}\">Перейти до книги</a>"
+            text += f"\n📚 <i>Жанр: {ksd_book.genre}</i>" if ksd_book.genre else ""
+            text += f"\n🏢 <i>Видавництво: {ksd_book.publisher}</i>" if ksd_book.publisher else ""
+            text += f"\n📆 <i>Рік видання: {ksd_book.publish_year}</i>" if ksd_book.publish_year else ""
+            text += f"\n📖 <i>ISBN: {ksd_book.isbn}</i>" if ksd_book.isbn else ""
+
+        await message.answer(text.strip(), reply_markup=kb, parse_mode="HTML", link_preview_options=LinkPreviewOptions(is_disabled=True))
 
     if await is_readed_books_limit_reached(user.id):
         await message.answer(
@@ -208,6 +214,13 @@ async def save_all_books(callback: types.CallbackQuery, state: FSMContext):
     )
 
     created = await readed_book_controller.create_readed_books(readed_books[:READED_BOOKS_LIMIT], user)
+
+    if not created:
+        await callback.answer("На жаль, я не зберегла жодної книги")
+        await state.clear()
+        return
+
+    await readed_book_controller.tie_readed_books_to_ksd_item(created)
 
     await callback.message.edit_reply_markup(None)
     await callback.message.answer(f"✅ Збережено {len(created)} записів.")
