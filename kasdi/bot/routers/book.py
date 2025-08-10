@@ -31,6 +31,13 @@ router = Router(
 )
 
 
+READED_BOOKS_LIMIT = 15
+
+async def is_readed_books_limit_reached(user_id: str) -> bool:
+    readed_books = await readed_book_controller.get_readed_books_by_user_id(user_id)
+    return len(readed_books) >= READED_BOOKS_LIMIT
+
+
 class BookInput(StatesGroup):
     collecting = State()
 
@@ -91,6 +98,12 @@ async def readed_books_handler(message: types.Message):
 
         # TODO: FIND RELEVANT INFO ABOUT BOOK IN KDS DATABASE
         await message.answer(text, reply_markup=kb, parse_mode="HTML")
+
+    if await is_readed_books_limit_reached(user.id):
+        await message.answer(
+            f"A... іще - ти досяг ліміту в {READED_BOOKS_LIMIT} прочитаних книг, поки твоя поличка забита. 📚"
+        )
+        return
 
     await message.answer(
         "➕ Щоб додати нову/нові книги, просто натисни кнопку:",
@@ -168,7 +181,7 @@ async def collect_entries(message: Message, state: FSMContext):
     await state.update_data(entries=entries)
 
     prompt = await message.answer(
-        "📚 Запис додано. Надішли ще одну книгу або натисни кнопку, щоб зберегти всі записи.",
+        "📚 Запис додано. Надішли ще або натисни кнопку, щоб зберегти всі записи.",
         reply_markup=book_session_keyboard
     )
 
@@ -194,7 +207,7 @@ async def save_all_books(callback: types.CallbackQuery, state: FSMContext):
         user=user,
     )
 
-    created = await readed_book_controller.create_readed_books(readed_books, user)
+    created = await readed_book_controller.create_readed_books(readed_books[:READED_BOOKS_LIMIT], user)
 
     await callback.message.edit_reply_markup(None)
     await callback.message.answer(f"✅ Збережено {len(created)} записів.")
