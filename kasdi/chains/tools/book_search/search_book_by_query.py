@@ -4,7 +4,7 @@ from pydantic import PrivateAttr
 from langchain_core.tools import BaseTool
 from langchain_openai import OpenAIEmbeddings
 
-from databases.models.ksd import Book, Author
+from database.models.ksd import Book, Author
 
 from .args_schemas import SearchBooksByQueryArgs
 from .utils import book_formatter

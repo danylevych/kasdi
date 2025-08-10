@@ -4,7 +4,7 @@ from typing import BinaryIO, List, Optional
 from langchain_core.messages import HumanMessage
 
 from bot.types import BookCreateMessage
-from databases.models.kasdi import ReadedBook, User
+from database.models.kasdi import ReadedBook, User
 from chains.parse_data import ParseBookDataChain, BookDataList
 
 from .voice_parser import VoiceParser

@@ -2,7 +2,7 @@ import asyncio
 from typing import List, Optional, Type
 from langchain_core.tools import BaseTool
 
-from databases.models.ksd import Book, Author
+from database.models.ksd import Book, Author
 
 from .args_schemas import SearchBooksArgs
 from .enums import GenreEnum, AgeRestrictionEnum

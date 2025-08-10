@@ -1,5 +1,5 @@
 from typing import Optional
-from databases.models.kasdi import User, MemoryItem
+from database.models.kasdi import User, MemoryItem
 
 
 async def get_user_by_id(user_id: str) -> Optional[User]:

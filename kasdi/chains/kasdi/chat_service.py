@@ -2,7 +2,7 @@ from typing import List
 from beanie import PydanticObjectId
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
 
-from databases.models.kasdi import Chat, Role
+from database.models.kasdi import Chat, Role
 from controllers import chat_controller
 
 

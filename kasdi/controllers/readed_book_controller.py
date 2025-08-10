@@ -3,8 +3,8 @@ from beanie import Link
 from typing import List, Optional, Tuple, Union
 
 from bson import ObjectId
-from databases.models.kasdi import ReadedBook, User
-from databases.models.ksd import Book as KSDItem
+from database.models.kasdi import ReadedBook, User
+from database.models.ksd import Book as KSDItem
 from controllers import user_controller
 
 

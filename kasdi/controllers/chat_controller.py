@@ -3,7 +3,7 @@
 from typing import Optional
 from beanie import PydanticObjectId
 
-from databases.models.kasdi import Chat, Message, Role
+from database.models.kasdi import Chat, Message, Role
 
 from controllers import user_controller
 

@@ -4,13 +4,12 @@ from datetime import datetime
 from pydantic import BaseModel
 from beanie import PydanticObjectId
 
-from langchain_openai import ChatOpenAI
 from langgraph.prebuilt import create_react_agent
 from langchain_openai import ChatOpenAI
 from langchain.prompts import PromptTemplate
 from langchain_core.tools import BaseTool
 
-from databases.models.kasdi import User
+from database.models.kasdi import User
 from controllers import user_controller
 
 from .user_service import UserContextService

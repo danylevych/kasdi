@@ -1,6 +1,6 @@
 import asyncio
 from aiogram import Router
-from aiogram.types import Message
+from aiogram.types import Message, LinkPreviewOptions
 from aiogram.utils.chat_action import ChatActionSender
 
 from chains.kasdi import run_kasdi
@@ -54,7 +54,7 @@ async def _handle_user_message(message: Message):
         print(f"Response from Kasdi: {response}")
         final_message = response["messages"][-1].content
 
-        await message.answer(make_telegram_safe_message(final_message), parse_mode="markdown")
+        await message.answer(make_telegram_safe_message(final_message), parse_mode="markdown", link_preview_options=LinkPreviewOptions(is_disabled=True))
         await chat_controller.add_message_to_chat(
             chat=chat,
             message=chat_controller.Message(

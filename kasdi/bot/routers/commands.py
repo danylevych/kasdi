@@ -12,7 +12,7 @@ from controllers import (
 
 
 router = Router(
-    name="comands",
+    name="commands",
 )
 
 @router.message(CommandStart())
