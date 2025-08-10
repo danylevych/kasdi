@@ -11,6 +11,14 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 # Set timezone
 ENV TZ=Europe/Kyiv
 
+# Install minimal OS packages (certs, locales, and runtime basics)
+RUN apt-get update \
+     && apt-get install -y --no-install-recommends \
+         ca-certificates \
+         tzdata \
+         ffmpeg \
+     && rm -rf /var/lib/apt/lists/*
+
 # Create app directory
 WORKDIR /app
 
@@ -26,26 +34,6 @@ COPY . .
 
 # The bot expects to be run from the kasdi/ directory (relative imports like `from dependencies import ...`)
 WORKDIR /app/kasdi
-
-ENV MONGODB_URL=""
-ENV MONGODB_DATABASE_KSD=""
-ENV MONGODB_DATABASE_KASDI=""
-
-ENV OPENAI_API_KEY=""
-ENV EMBEDDINGS_MODEL=""
-ENV LLM_MODEL=""
-ENV LLM_TEMPERATURE=""
-
-ENV TELEGRAM_BOT_TOKEN=""
-
-ENV TAVILY_API_KEY=""
-ENV FIRE_CRAWL_API_KEY=""
-
-ENV LANGSMITH_TRACING=true
-ENV LANGSMITH_ENDPOINT=""
-ENV LANGSMITH_API_KEY=""
-ENV LANGSMITH_PROJECT=""
-
 
 # Default command runs the Telegram bot
 CMD ["python", "start_bot.py"]
