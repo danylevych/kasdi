@@ -13,10 +13,11 @@ ENV TZ=Europe/Kyiv
 
 # Install minimal OS packages (certs, locales, and runtime basics)
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-       ca-certificates \
-       tzdata \
-    && rm -rf /var/lib/apt/lists/*
+     && apt-get install -y --no-install-recommends \
+         ca-certificates \
+         tzdata \
+         ffmpeg \
+     && rm -rf /var/lib/apt/lists/*
 
 # Create app directory
 WORKDIR /app

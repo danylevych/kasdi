@@ -1,9 +1,12 @@
 import os
-from dotenv import load_dotenv
+from dotenv import load_dotenv, find_dotenv
 from functools import lru_cache
 
 
-load_dotenv()
+# Load .env if present (search upwards from CWD); do not override existing env vars
+_dotenv_path = find_dotenv(usecwd=True)
+if _dotenv_path:
+    load_dotenv(_dotenv_path, override=False)
 
 
 class Config:
