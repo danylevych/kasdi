@@ -8,13 +8,20 @@ from typing import Type
 class WebSearchToolArgs(BaseModel):
     url: str = Field(
         ...,
-        description="The URL to search for.",
+        description=(
+            "The full URL of the web page to scrape. Must be a direct link to the specific page "
+            "the user wants information from. Only use URLs in allowed languages (no russian sources). "
+            "Example: 'https://ksd.ua/book/harry-potter-i-kamen-filosofskiy/'."
+        ),
     )
 
 
 class WebScrapeTool(BaseTool):
     name: str = "web_scrape"
-    description: str = "Scrape the content of a web page."
+    description: str = (
+        "Use this tool to retrieve the visible content of a specific web page. "
+        "It converts the page into clean markdown or HTML so you can extract relevant information."
+    )
     args_schema: Type[WebSearchToolArgs] = WebSearchToolArgs
 
     _api_key: str = PrivateAttr()

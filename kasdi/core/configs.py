@@ -34,7 +34,7 @@ class Config:
 
     # LLM configuration
     LLM_MODEL: str = os.getenv("LLM_MODEL", "gpt-4.1-mini")
-    LLM_TEMPERATURE: float = float(os.getenv("LLM_TEMPERATURE", "0.5"))
+    LLM_TEMPERATURE: float = float(os.getenv("LLM_TEMPERATURE", "0.8"))
 
     # Telegram Bot configuration
     TELEGRAM_BOT_TOKEN: str = os.getenv("TELEGRAM_BOT_TOKEN")

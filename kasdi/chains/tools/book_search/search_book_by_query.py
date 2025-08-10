@@ -12,15 +12,21 @@ from .utils import book_formatter
 
 class SearchBooksByQueryTool(BaseTool):
     name: str = "search_books_by_query"
-    description: str = """
-    Search for books in KSD database using vector search.
-
-    The vector for each book was created for the following fields:
-    * tille - the title of the book
-    * original_name - the original name of the book (if it is different from the title)
-    * author - the name of the author
-    * description - the description of the book (contains the plot of the book and other useful information)
-    """
+    description: str = (
+        "Use this tool to find books in the KSD bookstore database when the user provides a free-form "
+        "description, partial information, or wants books similar in theme, story, or style. "
+        "It searches across book titles, original titles, author names, and descriptions to match "
+        "the meaning of the query, not just exact words.\n\n"
+        "When to use:\n"
+        "- The user describes the plot, theme, or feeling of the book (e.g., 'про магічну школу і друзів').\n"
+        "- The user remembers only part of the title or author.\n"
+        "- The user wants recommendations similar to a specific book.\n"
+        "- The request is broad and doesn't fit strict filters.\n\n"
+        "What NOT to do:\n"
+        "- Do not call if the user gives exact structured filters (author + genre) — use 'search_books' instead.\n"
+        "- Avoid using for unrelated requests or non-book searches.\n\n"
+        "This tool is ideal for matching the idea or topic of a book, even if the exact name or author is unknown."
+    )
     args_schema: Type[SearchBooksByQueryArgs] = SearchBooksByQueryArgs
 
     _embeddings: OpenAIEmbeddings = PrivateAttr()

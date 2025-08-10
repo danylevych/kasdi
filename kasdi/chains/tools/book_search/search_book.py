@@ -11,7 +11,23 @@ from .utils import book_formatter
 
 class SearchBooksTool(BaseTool):
     name: str = "search_books"
-    description: str = "Search books in the database with various filters."
+    description: str = (
+        "Use this tool to search for books in the KSD bookstore database by applying one or more filters. "
+        "Call this tool when the user wants book recommendations, is searching for a specific title, "
+        "series, author, or wants books within certain genres, publishers, or age restrictions.\n\n"
+        "When to use:\n"
+        "- The user names a book title, series, or author they are looking for.\n"
+        "- The user asks for books in a specific genre or with a specific age rating.\n"
+        "- The user wants books from a certain publisher.\n"
+        "- The user gives partial info (e.g., 'fantasy books for teens').\n\n"
+        "What NOT to do:\n"
+        "- Do not call if the request is unrelated to books.\n"
+        "- Do not guess parameters — if unsure, pass only what the user mentioned.\n"
+        "- Avoid over-filtering unless the user explicitly sets multiple criteria.\n\n"
+        "If multiple filters are provided, the search will match all of them. "
+        "Always prefer concise and relevant filters to get the most accurate results."
+    )
+
     args_schema: Type[SearchBooksArgs] = SearchBooksArgs
 
     def _run(
