@@ -18,11 +18,13 @@ from controllers import (
     user_controller,
 )
 
+from core.logger import create_scoped_logger
 
 router = Router(
     name="profile",
 )
 
+logger = create_scoped_logger("kasdi.bot.routers.profile")
 
 class InstructionState(StatesGroup):
     waiting_for_instruction = State()
@@ -42,6 +44,7 @@ user_instruction_prompt = (
 
 @router.message(ShowProfileFilter())
 async def profile_handler(message: types.Message):
+    logger.info(f"Profile view requested: user_tg_id={message.from_user.id}")
     user = await user_controller.get_user_by_tg_id(message.from_user.id)
 
     await message.answer(
@@ -50,6 +53,7 @@ async def profile_handler(message: types.Message):
     )
 
     if user and user.custom_instruction:
+        logger.debug("User has custom instruction; presenting edit/delete options")
         kb = InlineKeyboardMarkup(inline_keyboard=[
             [
                 InlineKeyboardButton(
@@ -69,6 +73,7 @@ async def profile_handler(message: types.Message):
             reply_markup=kb
         )
     else:
+        logger.debug("User has no custom instruction; presenting add option")
         await message.answer(
             "У тебе ще немає інструкції «Про мене». Можеш додати її зараз.",
             reply_markup=InlineKeyboardMarkup(
@@ -83,6 +88,7 @@ async def profile_handler(message: types.Message):
 
 @router.callback_query(AddInstructionCallback())
 async def request_user_instruction(callback: types.CallbackQuery, state: FSMContext):
+    logger.info(f"Add instruction requested: user_tg_id={callback.from_user.id}")
     await callback.message.delete()
 
     your_instruction = "Ось твоя інструкція: \n\n"
@@ -116,6 +122,7 @@ async def request_user_instruction(callback: types.CallbackQuery, state: FSMCont
 
 @router.callback_query(EditInstructionCallback())
 async def edit_instruction(callback: types.CallbackQuery, state: FSMContext):
+    logger.info(f"Edit instruction requested: user_tg_id={callback.from_user.id}")
     await callback.message.delete()
 
     user = await user_controller.get_user_by_tg_id(callback.from_user.id)
@@ -142,6 +149,7 @@ async def edit_instruction(callback: types.CallbackQuery, state: FSMContext):
     InstructionState.waiting_for_instruction
 )
 async def cancel_instruction(callback: types.CallbackQuery, state: FSMContext):
+    logger.info(f"Cancel instruction flow: user_tg_id={callback.from_user.id}")
     await state.clear()
     await callback.message.edit_reply_markup(reply_markup=None)
     await callback.message.answer("❌ Ми все скасували. Якщо захочеш, можеш спробувати ще раз пізніше.")
@@ -152,6 +160,7 @@ async def cancel_instruction(callback: types.CallbackQuery, state: FSMContext):
     InstructionState.waiting_for_instruction
 )
 async def delete_instruction(callback: types.CallbackQuery, state: FSMContext):
+    logger.info(f"Delete instruction requested: user_tg_id={callback.from_user.id}")
     user = await user_controller.get_user_by_tg_id(callback.from_user.id)
 
     if user and getattr(user, "custom_instruction", None):
@@ -166,6 +175,7 @@ async def delete_instruction(callback: types.CallbackQuery, state: FSMContext):
 
 @router.message(InstructionState.waiting_for_instruction)
 async def save_instruction(message: types.Message, state: FSMContext):
+    logger.info(f"Save instruction message received: user_tg_id={message.from_user.id}")
     new_instruction = message.text
     user = await user_controller.get_user_by_tg_id(message.from_user.id)
 

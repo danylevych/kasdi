@@ -6,23 +6,23 @@ from .models.kasdi import Chat, ReadedBook, User
 
 from core.logger import create_scoped_logger
 
-logger = create_scoped_logger("kasdi.databases.client")
+logger = create_scoped_logger("kasdi.database.client")
 
 
 async def init_db():
-    logger.info("Initializing Beanie with MongoDB...")
+    logger.info("Initializing MongoDB (Beanie)")
 
     client = AsyncIOMotorClient(get_config().MONGODB_URL)
 
-    logger.info("Initializing Beanie for KSD database...")
+    logger.info("Initializing Beanie for KSD database models")
     await init_beanie(
         database=client[get_config().MONGODB_DATABASE_KSD],
         document_models=[Author, Book],
     )
 
-    logger.info("Initializing Beanie for KASDI database...")
+    logger.info("Initializing Beanie for KASDI database models")
     await init_beanie(
         database=client[get_config().MONGODB_DATABASE_KASDI],
         document_models=[Chat, ReadedBook, User],
     )
-    logger.info("Beanie initialization complete.")
+    logger.info("Beanie initialization complete")

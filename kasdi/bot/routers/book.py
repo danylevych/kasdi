@@ -25,11 +25,14 @@ from controllers import (
     readed_book_controller,
 )
 
+from core.logger import create_scoped_logger
+
 
 router = Router(
     name="book",
 )
 
+logger = create_scoped_logger("kasdi.bot.routers.book")
 
 READED_BOOKS_LIMIT = 15
 
@@ -60,21 +63,25 @@ book_session_keyboard = InlineKeyboardMarkup(
 
 @router.message(ShowReadedBooksFilter())
 async def readed_books_handler(message: types.Message):
+    logger.info(f"Read books requested: user_tg_id={message.from_user.id}")
     user = await user_controller.get_user_by_tg_id(message.from_user.id)
 
     if not user:
+        logger.warning("User not found for read books view")
         await message.answer("Користувача не знайдено.")
         return
 
     books = await readed_book_controller.get_readed_books_by_user_id(user.id, attach_ksd_info=True)
 
     if not books:
+        logger.info("No read books found for user")
         await message.answer("📚 У тебе ще немає прочитаних книг.")
 
     else:
         await message.answer("<b>📚 Ось список твоїх прочитаних книг:</b>", parse_mode="HTML")
 
     for readed_book, ksd_book in books:
+        logger.debug(f"Rendering read book: id={readed_book.id}")
         kb = InlineKeyboardMarkup(inline_keyboard=[
             [
                 InlineKeyboardButton(
@@ -106,6 +113,7 @@ async def readed_books_handler(message: types.Message):
         await message.answer(text.strip(), reply_markup=kb, parse_mode="HTML", link_preview_options=LinkPreviewOptions(is_disabled=True))
 
     if await is_readed_books_limit_reached(user.id):
+        logger.info("Read books limit reached; notifying user")
         await message.answer(
             f"A... іще - ти досяг ліміту в {READED_BOOKS_LIMIT} прочитаних книг, поки твоя поличка забита. 📚"
         )
@@ -123,23 +131,28 @@ async def readed_books_handler(message: types.Message):
 @router.callback_query(DeleteReadedBookCallback())
 async def delete_book(callback: types.CallbackQuery):
     book_id = callback.data.split(":")[1]
+    logger.info(f"Delete read book requested: book_id={book_id}, user_tg_id={callback.from_user.id}")
     user = await user_controller.get_user_by_tg_id(callback.from_user.id)
 
     if not user:
+        logger.warning("User not found when deleting read book")
         await callback.answer("Користувача не знайдено.")
         return
 
     result = await readed_book_controller.delete_readed_book(user_id=user.id, book_id=book_id)
 
     if result:
+        logger.info("Read book deleted successfully")
         await callback.message.edit_reply_markup(reply_markup=None)
         await callback.message.edit_text("✅ Ми видалили книгу з твоїх прочитаних.")
     else:
+        logger.error("Failed to delete read book")
         await callback.answer("❌ Помилка при видаленні книги.", show_alert=True)
 
 
 @router.callback_query(AddReadedBookCallback())
 async def start_book_session(callback: types.CallbackQuery, state: FSMContext):
+    logger.info(f"Start book session requested: user_tg_id={callback.from_user.id}")
     await callback.message.delete()
 
     await state.set_state(BookInput.collecting)
@@ -164,6 +177,7 @@ async def start_book_session(callback: types.CallbackQuery, state: FSMContext):
 
 @router.callback_query(CancelAddingBooksCallback(), BookInput.collecting)
 async def cancel_adding_books(callback: types.CallbackQuery, state: FSMContext):
+    logger.info(f"Cancel adding books: user_tg_id={callback.from_user.id}")
     await state.clear()
     await callback.message.edit_reply_markup(None)
     await callback.message.answer("❌ Добренько, додаси пізніше 😅")
@@ -172,6 +186,7 @@ async def cancel_adding_books(callback: types.CallbackQuery, state: FSMContext):
 
 @router.message(BookInput.collecting)
 async def collect_entries(message: Message, state: FSMContext):
+    logger.debug("Collecting book entry from message")
     data = await state.get_data()
 
     last_id = data.get("last_prompt_id")
@@ -196,9 +211,11 @@ async def collect_entries(message: Message, state: FSMContext):
 
 @router.callback_query(SaveAllReadedBooksCallback(), BookInput.collecting)
 async def save_all_books(callback: types.CallbackQuery, state: FSMContext):
+    logger.info(f"Save all read books requested: user_tg_id={callback.from_user.id}")
     user = await user_controller.get_user_by_tg_id(callback.from_user.id)
 
     if not user:
+        logger.warning("User not found while saving read books")
         await callback.answer("Користувача не знайдено.", show_alert=True)
         await state.clear()
         return
@@ -212,15 +229,19 @@ async def save_all_books(callback: types.CallbackQuery, state: FSMContext):
         messages=entries,
         user=user,
     )
+    logger.debug(f"Parsed entries into read books count={len(readed_books)}")
 
     created = await readed_book_controller.create_readed_books(readed_books[:READED_BOOKS_LIMIT], user)
+    logger.info(f"Created read books count={len(created)}")
 
     if not created:
+        logger.warning("No read books created from session")
         await callback.answer("На жаль, я не зберегла жодної книги")
         await state.clear()
         return
 
     await readed_book_controller.tie_readed_books_to_ksd_item(created)
+    logger.debug("Tied read books to KSD items where possible")
 
     await callback.message.edit_reply_markup(None)
     await callback.message.answer(f"✅ Збережено {len(created)} записів.")
@@ -230,6 +251,7 @@ async def save_all_books(callback: types.CallbackQuery, state: FSMContext):
 
 @router.callback_query(CancelAllReadedBooksCallback(), BookInput.collecting)
 async def cancel_all_books(callback: types.CallbackQuery, state: FSMContext):
+    logger.info(f"Cancel all read books session: user_tg_id={callback.from_user.id}")
     await state.clear()
     await callback.message.edit_reply_markup(None)
     await callback.message.answer("❌ Ого, ми скасували всі твої записи. Якщо захочеш, можеш спробувати ще раз пізніше.")

@@ -12,6 +12,7 @@ from controllers import (
 
 from bot.utils import make_telegram_safe_message
 from bot.parsers.voice_parser import process_voice_message
+from core.logger import create_scoped_logger
 
 # TODO: AFTER 40 MESSAGES MAKE THE FANTUNE OF HOW DOES THE USER COMMUNICATE AND USE IT TO MAKE BETTER RESPONSES
 
@@ -22,11 +23,15 @@ router = Router(
 
 _message_locks: dict[int, asyncio.Lock] = {}
 
+logger = create_scoped_logger("kasdi.bot.routers.kasdi")
+
 
 async def _handle_user_message(message: Message):
+    logger.info(f"Incoming message: chat_id={message.chat.id}, user_id={message.from_user.id}")
     user = await user_controller.get_user_by_tg_id(message.from_user.id)
 
     if not user:
+        logger.warning("User not found by Telegram ID; prompting /start")
         await message.answer("Будь ласка, спочатку почніть розмову з ботом командою /start.")
         return
 
@@ -35,6 +40,7 @@ async def _handle_user_message(message: Message):
     text = message.text or ""
 
     if message.voice:
+        logger.debug("Voice message detected; processing to text")
         text = await process_voice_message(message)
 
     await chat_controller.add_message_to_chat(
@@ -51,7 +57,7 @@ async def _handle_user_message(message: Message):
             chat_id=chat.id
         )
 
-        print(f"Response from Kasdi: {response}")
+        logger.info("Kasdi agent returned a response; preparing final message")
         final_message = response["messages"][-1].content
 
         await message.answer(make_telegram_safe_message(final_message), parse_mode="markdown", link_preview_options=LinkPreviewOptions(is_disabled=True))
@@ -62,6 +68,7 @@ async def _handle_user_message(message: Message):
                 content=final_message
             )
         )
+    logger.debug("Assistant message saved to chat history")
 
 
 @router.message()
@@ -74,4 +81,8 @@ async def handle_user_message(message: Message):
     #     await message.answer("Будь ласка, зачекай, я обробляю відповідаю..")
 
     async with _message_locks[message.chat.id]:
-        await _handle_user_message(message)
+        logger.debug("Acquired message lock for chat")
+        try:
+            await _handle_user_message(message)
+        finally:
+            logger.debug("Released message lock for chat")
