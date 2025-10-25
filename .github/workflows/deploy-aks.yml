@@ -12,41 +12,35 @@ env:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-    environment: production
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout
+      uses: actions/checkout@v4
 
-    # 1) Login to Azure (SP з ролями Contributor + AcrPush)
-    - name: ACR docker login (admin user)
+    - name: Azure login
+      uses: azure/login@v2
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+    - name: ACR docker login
       run: echo "${{ secrets.ACR_PASSWORD }}" | docker login ${{ secrets.ACR_LOGIN_SERVER }} -u "${{ secrets.ACR_USERNAME }}" --password-stdin
 
-    # 2) Login to ACR (далі docker build/push на раннері)
-    - name: ACR docker login
-      uses: azure/docker-login@v2
-      with:
-        login-server: ${{ secrets.ACR_LOGIN_SERVER }}
-        username: ${{ fromJson(secrets.AZURE_CREDENTIALS).clientId }}
-        password: ${{ fromJson(secrets.AZURE_CREDENTIALS).clientSecret }}
-
-    - name: Build & push image (no ACR Tasks)
+    - name: Build & push image
       run: |
         docker build -t ${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }} .
         docker tag  ${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }} ${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:latest
         docker push ${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
         docker push ${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:latest
 
-    # 3) Kube context
     - name: Set AKS context
       uses: azure/aks-set-context@v4
       with:
         resource-group: ${{ secrets.AKS_RESOURCE_GROUP }}
         cluster-name:  ${{ secrets.AKS_CLUSTER_NAME }}
 
-    # 4) Namespace + Secret з усіма ENV (одним об'єктом)
     - name: Ensure namespace
       run: kubectl get ns ${{ env.NAMESPACE }} || kubectl create ns ${{ env.NAMESPACE }}
 
-    - name: Apply app-secrets
+    - name: Apply app-secrets (all envs)
       run: |
         kubectl -n ${{ env.NAMESPACE }} delete secret app-secrets --ignore-not-found
         kubectl -n ${{ env.NAMESPACE }} create secret generic app-secrets \
@@ -65,7 +59,6 @@ jobs:
           --from-literal=LANGSMITH_API_KEY='${{ secrets.LANGSMITH_API_KEY }}' \
           --from-literal=LANGSMITH_PROJECT='${{ secrets.LANGSMITH_PROJECT }}'
 
-    # 5) Підставляємо образ у маніфест і деплоїмо
     - name: Render image
       run: sed -i "s|IMAGE_PLACEHOLDER|${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}|g" k8s/deployment.yaml
 
