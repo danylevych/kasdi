@@ -12,52 +12,41 @@ env:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    environment: production
     steps:
-    - name: Checkout
-      uses: actions/checkout@v4
+    - uses: actions/checkout@v4
 
-    # ── 0) Azure login: шлях А — через AZURE_CREDENTIALS (one-line JSON) ───────────
-    - name: Azure login (via AZURE_CREDENTIALS JSON)
-      if: ${{ secrets.AZURE_CREDENTIALS != '' }}
-      uses: azure/login@v2
-      with:
-        creds: ${{ secrets.AZURE_CREDENTIALS }}
-
-    # ── 0b) Azure login: шлях B — через окремі секрети ───────────────────────────
-    - name: Azure login (via separate fields)
-      if: ${{ secrets.AZURE_CREDENTIALS == '' }}
-      uses: azure/login@v2
-      with:
-        auth-type: SERVICE_PRINCIPAL
-        client-id:     ${{ secrets.AZURE_CLIENT_ID }}
-        tenant-id:     ${{ secrets.AZURE_TENANT_ID }}
-        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-        client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
-
-    # 1) Docker login у ACR (адмін-користувач з ACR → Access keys)
-    - name: ACR docker login
+    # 1) Login to Azure (SP з ролями Contributor + AcrPush)
+    - name: ACR docker login (admin user)
       run: echo "${{ secrets.ACR_PASSWORD }}" | docker login ${{ secrets.ACR_LOGIN_SERVER }} -u "${{ secrets.ACR_USERNAME }}" --password-stdin
 
-    # 2) Build & push image до ACR
-    - name: Build & push image
+    # 2) Login to ACR (далі docker build/push на раннері)
+    - name: ACR docker login
+      uses: azure/docker-login@v2
+      with:
+        login-server: ${{ secrets.ACR_LOGIN_SERVER }}
+        username: ${{ fromJson(secrets.AZURE_CREDENTIALS).clientId }}
+        password: ${{ fromJson(secrets.AZURE_CREDENTIALS).clientSecret }}
+
+    - name: Build & push image (no ACR Tasks)
       run: |
         docker build -t ${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }} .
         docker tag  ${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }} ${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:latest
         docker push ${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
         docker push ${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:latest
 
-    # 3) Підключення до кластера AKS
+    # 3) Kube context
     - name: Set AKS context
       uses: azure/aks-set-context@v4
       with:
         resource-group: ${{ secrets.AKS_RESOURCE_GROUP }}
         cluster-name:  ${{ secrets.AKS_CLUSTER_NAME }}
 
-    # 4) Namespace і Secret з усіма ENV
+    # 4) Namespace + Secret з усіма ENV (одним об'єктом)
     - name: Ensure namespace
       run: kubectl get ns ${{ env.NAMESPACE }} || kubectl create ns ${{ env.NAMESPACE }}
 
-    - name: Apply app-secrets (all envs)
+    - name: Apply app-secrets
       run: |
         kubectl -n ${{ env.NAMESPACE }} delete secret app-secrets --ignore-not-found
         kubectl -n ${{ env.NAMESPACE }} create secret generic app-secrets \
