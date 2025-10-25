@@ -23,7 +23,7 @@ spec:
     spec:
       containers:
         - name: kasdi-bot
-          image: kasdiacr.azurecr.io/image-workflow-1761383235791
+          image: IMAGE_PLACEHOLDER
           imagePullPolicy: Always
           envFrom:
             - secretRef:
