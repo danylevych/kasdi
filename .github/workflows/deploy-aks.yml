@@ -1,0 +1,96 @@
+name: CI-CD to AKS
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+env:
+  IMAGE_NAME: kasdi-bot
+  NAMESPACE: kasdi
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    # 1) Login to Azure with SP (JSON у секреті AZURE_CREDENTIALS)
+    - name: Azure login
+      uses: azure/login@v2
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+    # 2) Login to ACR and build/push image (latest + commit SHA)
+    - name: ACR docker login
+      uses: azure/docker-login@v2
+      with:
+        login-server: ${{ secrets.ACR_LOGIN_SERVER }}
+        username: ${{ fromJson(secrets.AZURE_CREDENTIALS).clientId }}
+        password: ${{ fromJson(secrets.AZURE_CREDENTIALS).clientSecret }}
+
+    - name: Build & push image
+      run: |
+        docker build -t ${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }} .
+        docker tag  ${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }} ${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:latest
+        docker push ${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+        docker push ${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:latest
+
+    # 3) Set AKS context
+    - name: Set AKS context
+      uses: azure/aks-set-context@v4
+      with:
+        resource-group: ${{ secrets.AKS_RESOURCE_GROUP }}
+        cluster-name:  ${{ secrets.AKS_CLUSTER_NAME }}
+
+    # 4) Ensure namespace exists
+    - name: Ensure namespace
+      run: kubectl get ns ${{ env.NAMESPACE }} || kubectl create ns ${{ env.NAMESPACE }}
+
+    # 5) (Re)create single Kubernetes Secret with ALL envs
+    - name: Apply app-secrets (all envs)
+      run: |
+        kubectl -n ${{ env.NAMESPACE }} delete secret app-secrets --ignore-not-found
+        kubectl -n ${{ env.NAMESPACE }} create secret generic app-secrets \
+          --from-literal=MONGODB_URL='${{ secrets.MONGODB_URL }}' \
+          --from-literal=MONGODB_DATABASE_KSD='${{ secrets.MONGODB_DATABASE_KSD }}' \
+          --from-literal=MONGODB_DATABASE_KASDI='${{ secrets.MONGODB_DATABASE_KASDI }}' \
+          --from-literal=OPENAI_API_KEY='${{ secrets.OPENAI_API_KEY }}' \
+          --from-literal=EMBEDDINGS_MODEL='${{ secrets.EMBEDDINGS_MODEL }}' \
+          --from-literal=LLM_MODEL='${{ secrets.LLM_MODEL }}' \
+          --from-literal=LLM_TEMPERATURE='${{ secrets.LLM_TEMPERATURE }}' \
+          --from-literal=TELEGRAM_BOT_TOKEN='${{ secrets.TELEGRAM_BOT_TOKEN }}' \
+          --from-literal=TAVILY_API_KEY='${{ secrets.TAVILY_API_KEY }}' \
+          --from-literal=FIRE_CRAWL_API_KEY='${{ secrets.FIRE_CRAWL_API_KEY }}' \
+          --from-literal=LANGSMITH_TRACING='${{ secrets.LANGSMITH_TRACING }}' \
+          --from-literal=LANGSMITH_ENDPOINT='${{ secrets.LANGSMITH_ENDPOINT }}' \
+          --from-literal=LANGSMITH_API_KEY='${{ secrets.LANGSMITH_API_KEY }}' \
+          --from-literal=LANGSMITH_PROJECT='${{ secrets.LANGSMITH_PROJECT }}'
+
+    # 6) Render image into k8s/deployment.yaml (замінюємо IMAGE_PLACEHOLDER)
+    - name: Render image in manifest
+      run: |
+        sed -i "s|IMAGE_PLACEHOLDER|${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}|g" k8s/deployment.yaml
+
+    # 7) Deploy manifests
+    - name: Deploy to AKS
+      uses: azure/k8s-deploy@v5
+      with:
+        namespace: ${{ env.NAMESPACE }}
+        manifests: |
+          k8s/namespace.yaml
+          k8s/deployment.yaml
+
+    # 8) Wait for rollout and show last logs if failed
+    - name: Rollout status
+      run: |
+        set -e
+        kubectl -n ${{ env.NAMESPACE }} rollout status deploy/${{ env.IMAGE_NAME }} --timeout=180s || (
+          echo "----- Events -----"
+          kubectl -n ${{ env.NAMESPACE }} get events --sort-by=.lastTimestamp | tail -n 50
+          echo "----- Pods -----"
+          kubectl -n ${{ env.NAMESPACE }} get pods -o wide
+          exit 1
+        )

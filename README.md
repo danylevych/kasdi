@@ -93,11 +93,31 @@ The project uses a scoped logger utility (`core/logger.py`). You can control ver
 - Improve ingestion with batching and retries
 - Deploy with docker-compose (MongoDB + Bot + future API)
 
+## Deployment to Azure AKS
+
+See detailed guide: [docs/DEPLOYMENT_AKS.md](./docs/DEPLOYMENT_AKS.md)
+
+Quick start:
+```bash
+# Create Azure resources
+az aks create --resource-group kasdi-rg --name kasdi-aks --attach-acr kasdiacr
+
+# Deploy
+kubectl apply -f k8s/
+```
+
+CI/CD via GitHub Actions is configured in `.github/workflows/deploy-aks.yml` - push to `main` for auto-deploy.
+
+## Quick Commands
+
+See [docs/COMMANDS.md](./docs/COMMANDS.md) for full reference.
+
 ## Troubleshooting
-- Bot doesn’t start: check `TELEGRAM_BOT_TOKEN` and network access
+- Bot doesn't start: check `TELEGRAM_BOT_TOKEN` and network access
 - DB init errors: verify `MONGODB_URL` and that MongoDB is reachable
 - Pinecone errors: ensure `PINECONE_API_KEY` and index exist
 - Whisper transcription issues: verify `OPENAI_API_KEY` and ffmpeg availability if needed
+- AKS issues: see [docs/DEPLOYMENT_AKS.md](./docs/DEPLOYMENT_AKS.md#troubleshooting)
 
 ## License
 Proprietary or TBD.
