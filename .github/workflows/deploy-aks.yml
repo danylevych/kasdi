@@ -12,45 +12,61 @@ env:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-    environment: production   # <- не потрібно, якщо всі secrets у Repository secrets
     steps:
     - name: Checkout
       uses: actions/checkout@v4
 
-    # 0) ЛОГІН В AZURE (ОБОВ'ЯЗКОВО перед aks-set-context)
+    # 1. Логін в Azure (потрібен для доступу до AKS)
     - name: Azure login
       uses: azure/login@v2
       with:
-        # один секрет JSON у форматі:
-        # {"clientId":"...","clientSecret":"...","subscriptionId":"...","tenantId":"..."}
         creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-    # 1) ЛОГІН В ACR (обери ОДИН спосіб — тут через admin user)
-    - name: ACR docker login
-      run: echo "${{ secrets.ACR_PASSWORD }}" | docker login ${{ secrets.ACR_LOGIN_SERVER }} -u "${{ secrets.ACR_USERNAME }}" --password-stdin
-
-    # 3) kubecontext до AKS (тепер спрацює, бо az вже залогінений)
+    # 2. Налаштування контексту AKS
     - name: Set AKS context
       uses: azure/aks-set-context@v4
       with:
         resource-group: 'kasdi-resource-group'
         cluster-name:  'kasdi-aks-production'
 
-    # 2) Build & push образу в ACR
-    - name: Build & push image
-      run: |
-        docker build -t ${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }} .
-        docker tag  ${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }} ${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:latest
-        docker push ${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
-        docker push ${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:latest
+    # --- ПОЧАТОК НОВОЇ СЕКЦІЇ ЗБІРКИ (ВИРІШЕННЯ ПРОБЛЕМИ ARM) ---
 
+    # 3. Налаштування QEMU (дозволяє збирати під ARM на звичайному сервері)
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v3
 
+    # 4. Налаштування Docker Buildx (потужний інструмент збірки)
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
 
-    # 4) Namespace + Secret з усіма ENV
+    # 5. Логін в Container Registry
+    - name: Login to ACR
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ secrets.ACR_LOGIN_SERVER }}
+        username: ${{ secrets.ACR_USERNAME }}
+        password: ${{ secrets.ACR_PASSWORD }}
+
+    # 6. Збірка та пуш образу (Multi-arch: для Intel та ARM)
+    - name: Build and push
+      uses: docker/build-push-action@v6
+      with:
+        context: .
+        push: true
+        # Найважливіший рядок: збираємо під обидві архітектури
+        platforms: linux/amd64,linux/arm64
+        tags: |
+          ${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          ${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:latest
+
+    # --- КІНЕЦЬ СЕКЦІЇ ЗБІРКИ ---
+
+    # 7. Створення Namespace (якщо немає)
     - name: Ensure namespace
       run: kubectl get ns ${{ env.NAMESPACE }} || kubectl create ns ${{ env.NAMESPACE }}
 
-    - name: Apply app-secrets (all envs)
+    # 8. Оновлення секретів (всі ваші ENV змінні)
+    - name: Apply app-secrets
       run: |
         kubectl -n ${{ env.NAMESPACE }} delete secret app-secrets --ignore-not-found
         kubectl -n ${{ env.NAMESPACE }} create secret generic app-secrets \
@@ -69,10 +85,11 @@ jobs:
           --from-literal=LANGSMITH_API_KEY='${{ secrets.LANGSMITH_API_KEY }}' \
           --from-literal=LANGSMITH_PROJECT='${{ secrets.LANGSMITH_PROJECT }}'
 
-    # 5) Підставляємо образ у маніфест і деплоїмо
+    # 9. Підстановка версії образу в маніфест
     - name: Render image
       run: sed -i "s|IMAGE_PLACEHOLDER|${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}|g" k8s/deployment.yaml
 
+    # 10. Деплой у Kubernetes
     - name: Deploy to AKS
       uses: azure/k8s-deploy@v5
       with:
@@ -81,5 +98,6 @@ jobs:
           k8s/namespace.yaml
           k8s/deployment.yaml
 
+    # 11. Перевірка статусу (тепер має пройти успішно!)
     - name: Rollout status
       run: kubectl -n ${{ env.NAMESPACE }} rollout status deploy/${{ env.IMAGE_NAME }} --timeout=180s
