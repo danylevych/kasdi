@@ -37,12 +37,12 @@ jobs:
         docker push ${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
         docker push ${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:latest
 
-    # 3) kubecontext до AKS (тепер спрацює, бо az вже залогінений)
-    - name: Set AKS context
-      uses: azure/aks-set-context@v4
-      with:
-        resource-group: ${{ secrets.AKS_RESOURCE_GROUP }}
-        cluster-name:  ${{ secrets.AKS_CLUSTER_NAME }}
+    # # 3) kubecontext до AKS (тепер спрацює, бо az вже залогінений)
+    # - name: Set AKS context
+    #   uses: azure/aks-set-context@v4
+    #   with:
+    #     resource-group: ${{ secrets.AKS_RESOURCE_GROUP }}
+    #     cluster-name:  ${{ secrets.AKS_CLUSTER_NAME }}
 
     # 4) Namespace + Secret з усіма ENV
     - name: Ensure namespace
