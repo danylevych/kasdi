@@ -12,72 +12,69 @@ env:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-    environment: production   # <- не потрібно, якщо всі secrets у Repository secrets
+    environment: production
+
     steps:
-    - name: Checkout
-      uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-    # 0) ЛОГІН В AZURE (ОБОВ'ЯЗКОВО перед aks-set-context)
-    - name: Azure login
-      uses: azure/login@v2
-      with:
-        # один секрет JSON у форматі:
-        # {"clientId":"...","clientSecret":"...","subscriptionId":"...","tenantId":"..."}
-        creds: ${{ secrets.AZURE_CREDENTIALS }}
+      # 0) Логін в Azure
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-    # 1) ЛОГІН В ACR (обери ОДИН спосіб — тут через admin user)
-    - name: ACR docker login
-      run: echo "${{ secrets.ACR_PASSWORD }}" | docker login ${{ secrets.ACR_LOGIN_SERVER }} -u "${{ secrets.ACR_USERNAME }}" --password-stdin
+      # 1) Логін в ACR
+      - name: ACR docker login
+        run: echo "${{ secrets.ACR_PASSWORD }}" | docker login ${{ secrets.ACR_LOGIN_SERVER }} -u "${{ secrets.ACR_USERNAME }}" --password-stdin
 
-    # 2) Build & push образу в ACR
-    - name: Build & push image
-      run: |
-        docker build -t ${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }} .
-        docker tag  ${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }} ${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:latest
-        docker push ${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
-        docker push ${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:latest
+      # 2) Build & push image
+      - name: Build & push image
+        env:
+          IMAGE: ${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+        run: |
+          docker build -t $IMAGE .
+          docker push $IMAGE
+          echo "IMAGE=$IMAGE" >> $GITHUB_ENV   # щоб використовувати нижче
 
-    # 3) kubecontext до AKS (тепер спрацює, бо az вже залогінений)
-    - name: Set AKS context
-      uses: azure/aks-set-context@v4
-      with:
-        resource-group: ${{ secrets.AKS_RESOURCE_GROUP }}
-        cluster-name:  ${{ secrets.AKS_CLUSTER_NAME }}
+      # 3) Отримати kubeconfig напряму (без aks-set-context)
+      - name: Get AKS credentials
+        run: |
+          az aks get-credentials \
+            --resource-group ${{ secrets.AKS_RESOURCE_GROUP }} \
+            --name ${{ secrets.AKS_CLUSTER_NAME }} \
+            --overwrite-existing
 
-    # 4) Namespace + Secret з усіма ENV
-    - name: Ensure namespace
-      run: kubectl get ns ${{ env.NAMESPACE }} || kubectl create ns ${{ env.NAMESPACE }}
+      # 4) Namespace
+      - name: Ensure namespace
+        run: kubectl create namespace ${{ env.NAMESPACE }} --dry-run=client -o yaml | kubectl apply -f -
 
-    - name: Apply app-secrets (all envs)
-      run: |
-        kubectl -n ${{ env.NAMESPACE }} delete secret app-secrets --ignore-not-found
-        kubectl -n ${{ env.NAMESPACE }} create secret generic app-secrets \
-          --from-literal=MONGODB_URL='${{ secrets.MONGODB_URL }}' \
-          --from-literal=MONGODB_DATABASE_KSD='${{ secrets.MONGODB_DATABASE_KSD }}' \
-          --from-literal=MONGODB_DATABASE_KASDI='${{ secrets.MONGODB_DATABASE_KASDI }}' \
-          --from-literal=OPENAI_API_KEY='${{ secrets.OPENAI_API_KEY }}' \
-          --from-literal=EMBEDDINGS_MODEL='${{ secrets.EMBEDDINGS_MODEL }}' \
-          --from-literal=LLM_MODEL='${{ secrets.LLM_MODEL }}' \
-          --from-literal=LLM_TEMPERATURE='${{ secrets.LLM_TEMPERATURE }}' \
-          --from-literal=TELEGRAM_BOT_TOKEN='${{ secrets.TELEGRAM_BOT_TOKEN }}' \
-          --from-literal=TAVILY_API_KEY='${{ secrets.TAVILY_API_KEY }}' \
-          --from-literal=FIRE_CRAWL_API_KEY='${{ secrets.FIRE_CRAWL_API_KEY }}' \
-          --from-literal=LANGSMITH_TRACING='${{ secrets.LANGSMITH_TRACING }}' \
-          --from-literal=LANGSMITH_ENDPOINT='${{ secrets.LANGSMITH_ENDPOINT }}' \
-          --from-literal=LANGSMITH_API_KEY='${{ secrets.LANGSMITH_API_KEY }}' \
-          --from-literal=LANGSMITH_PROJECT='${{ secrets.LANGSMITH_PROJECT }}'
+      # 5) Секрети з env (як і було)
+      - name: Apply app-secrets
+        run: |
+          kubectl -n ${{ env.NAMESPACE }} delete secret app-secrets --ignore-not-found
+          kubectl -n ${{ env.NAMESPACE }} create secret generic app-secrets \
+            --from-literal=MONGODB_URL='${{ secrets.MONGODB_URL }}' \
+            --from-literal=MONGODB_DATABASE_KSD='${{ secrets.MONGODB_DATABASE_KSD }}' \
+            --from-literal=MONGODB_DATABASE_KASDI='${{ secrets.MONGODB_DATABASE_KASDI }}' \
+            --from-literal=OPENAI_API_KEY='${{ secrets.OPENAI_API_KEY }}' \
+            --from-literal=EMBEDDINGS_MODEL='${{ secrets.EMBEDDINGS_MODEL }}' \
+            --from-literal=LLM_MODEL='${{ secrets.LLM_MODEL }}' \
+            --from-literal=LLM_TEMPERATURE='${{ secrets.LLM_TEMPERATURE }}' \
+            --from-literal=TELEGRAM_BOT_TOKEN='${{ secrets.TELEGRAM_BOT_TOKEN }}' \
+            --from-literal=TAVILY_API_KEY='${{ secrets.TAVILY_API_KEY }}' \
+            --from-literal=FIRE_CRAWL_API_KEY='${{ secrets.FIRE_CRAWL_API_KEY }}' \
+            --from-literal=LANGSMITH_TRACING='${{ secrets.LANGSMITH_TRACING }}' \
+            --from-literal=LANGSMITH_ENDPOINT='${{ secrets.LANGSMITH_ENDPOINT }}' \
+            --from-literal=LANGSMITH_API_KEY='${{ secrets.LANGSMITH_API_KEY }}' \
+            --from-literal=LANGSMITH_PROJECT='${{ secrets.LANGSMITH_PROJECT }}'
 
-    # 5) Підставляємо образ у маніфест і деплоїмо
-    - name: Render image
-      run: sed -i "s|IMAGE_PLACEHOLDER|${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}|g" k8s/deployment.yaml
+      # 6) Підставити образ і задеплоїти
+      - name: Deploy manifests
+        run: |
+          sed "s|IMAGE_PLACEHOLDER|$IMAGE|g" k8s/deployment.yaml | kubectl -n ${{ env.NAMESPACE }} apply -f -
+          kubectl -n ${{ env.NAMESPACE }} apply -f k8s/namespace.yaml
 
-    - name: Deploy to AKS
-      uses: azure/k8s-deploy@v5
-      with:
-        namespace: ${{ env.NAMESPACE }}
-        manifests: |
-          k8s/namespace.yaml
-          k8s/deployment.yaml
-
-    - name: Rollout status
-      run: kubectl -n ${{ env.NAMESPACE }} rollout status deploy/${{ env.IMAGE_NAME }} --timeout=180s
+      # 7) Перевірка rollout
+      - name: Rollout status
+        run: kubectl -n ${{ env.NAMESPACE }} rollout status deploy/${{ env.IMAGE_NAME }} --timeout=180s
