@@ -1,43 +1,37 @@
-name: CI-CD to AKS
+name: Deploy to AKS
 
 on:
   push:
-    branches: ["main"]
-  workflow_dispatch:
+    branches: [main]
 
 env:
   IMAGE_NAME: kasdi-bot
   NAMESPACE: kasdi
 
 jobs:
-  build-and-deploy:
+  deploy:
     runs-on: ubuntu-latest
-    environment: production
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      # 0) Логін в Azure
       - name: Azure login
         uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      # 1) Логін в ACR
-      - name: ACR docker login
-        run: echo "${{ secrets.ACR_PASSWORD }}" | docker login ${{ secrets.ACR_LOGIN_SERVER }} -u "${{ secrets.ACR_USERNAME }}" --password-stdin
+      - name: ACR login
+        run: az acr login --name ${{ secrets.ACR_LOGIN_SERVER }}
 
-      # 2) Build & push image
-      - name: Build & push image
+      - name: Build & push
         env:
-          IMAGE: ${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          REGISTRY: ${{ secrets.ACR_LOGIN_SERVER }}
         run: |
-          docker build -t $IMAGE .
-          docker push $IMAGE
-          echo "IMAGE=$IMAGE" >> $GITHUB_ENV   # щоб використовувати нижче
+          IMAGE="$REGISTRY/${{ env.IMAGE_NAME }}:${{ github.sha }}"
+          echo "IMAGE=$IMAGE" >> $GITHUB_ENV
+          docker build -t "$IMAGE" .
+          docker push "$IMAGE"
 
-      # 3) Отримати kubeconfig напряму (без aks-set-context)
       - name: Get AKS credentials
         run: |
           az aks get-credentials \
@@ -45,36 +39,13 @@ jobs:
             --name ${{ secrets.AKS_CLUSTER_NAME }} \
             --overwrite-existing
 
-      # 4) Namespace
-      - name: Ensure namespace
-        run: kubectl create namespace ${{ env.NAMESPACE }} --dry-run=client -o yaml | kubectl apply -f -
+      - name: Create namespace
+        run: kubectl create ns ${{ env.NAMESPACE }} --dry-run=client -o yaml | kubectl apply -f -
 
-      # 5) Секрети з env (як і було)
-      - name: Apply app-secrets
+      - name: Deploy app
         run: |
-          kubectl -n ${{ env.NAMESPACE }} delete secret app-secrets --ignore-not-found
-          kubectl -n ${{ env.NAMESPACE }} create secret generic app-secrets \
-            --from-literal=MONGODB_URL='${{ secrets.MONGODB_URL }}' \
-            --from-literal=MONGODB_DATABASE_KSD='${{ secrets.MONGODB_DATABASE_KSD }}' \
-            --from-literal=MONGODB_DATABASE_KASDI='${{ secrets.MONGODB_DATABASE_KASDI }}' \
-            --from-literal=OPENAI_API_KEY='${{ secrets.OPENAI_API_KEY }}' \
-            --from-literal=EMBEDDINGS_MODEL='${{ secrets.EMBEDDINGS_MODEL }}' \
-            --from-literal=LLM_MODEL='${{ secrets.LLM_MODEL }}' \
-            --from-literal=LLM_TEMPERATURE='${{ secrets.LLM_TEMPERATURE }}' \
-            --from-literal=TELEGRAM_BOT_TOKEN='${{ secrets.TELEGRAM_BOT_TOKEN }}' \
-            --from-literal=TAVILY_API_KEY='${{ secrets.TAVILY_API_KEY }}' \
-            --from-literal=FIRE_CRAWL_API_KEY='${{ secrets.FIRE_CRAWL_API_KEY }}' \
-            --from-literal=LANGSMITH_TRACING='${{ secrets.LANGSMITH_TRACING }}' \
-            --from-literal=LANGSMITH_ENDPOINT='${{ secrets.LANGSMITH_ENDPOINT }}' \
-            --from-literal=LANGSMITH_API_KEY='${{ secrets.LANGSMITH_API_KEY }}' \
-            --from-literal=LANGSMITH_PROJECT='${{ secrets.LANGSMITH_PROJECT }}'
+          sed "s|IMAGE_PLACEHOLDER|$IMAGE|g" k8s/deployment.yaml \
+            | kubectl apply -n ${{ env.NAMESPACE }} -f -
 
-      # 6) Підставити образ і задеплоїти
-      - name: Deploy manifests
-        run: |
-          sed "s|IMAGE_PLACEHOLDER|$IMAGE|g" k8s/deployment.yaml | kubectl -n ${{ env.NAMESPACE }} apply -f -
-          kubectl -n ${{ env.NAMESPACE }} apply -f k8s/namespace.yaml
-
-      # 7) Перевірка rollout
       - name: Rollout status
-        run: kubectl -n ${{ env.NAMESPACE }} rollout status deploy/${{ env.IMAGE_NAME }} --timeout=180s
+        run: kubectl rollout status deploy/${{ env.IMAGE_NAME }} -n ${{ env.NAMESPACE }}
