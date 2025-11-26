@@ -12,61 +12,59 @@ env:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    environment: production   # можна лишити або прибрати, якщо не юзаєш env secrets
+
     steps:
     - name: Checkout
       uses: actions/checkout@v4
 
-    # 1. Логін в Azure (потрібен для доступу до AKS)
+    # 0) ЛОГІН В AZURE
     - name: Azure login
       uses: azure/login@v2
       with:
+        # один секрет JSON у форматі:
+        # {"clientId":"...","clientSecret":"...","subscriptionId":"...","tenantId":"..."}
         creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-    # 2. Налаштування контексту AKS
+    # 1) ЛОГІН В ACR (admin user)
+    - name: ACR docker login
+      run: echo "${{ secrets.ACR_PASSWORD }}" | docker login ${{ secrets.ACR_LOGIN_SERVER }} -u "${{ secrets.ACR_USERNAME }}" --password-stdin
+
+    # 2) Multi-arch buildx: QEMU + Buildx
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v3
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    # 3) Build & push multi-arch image (amd64 + arm64)
+    - name: Build & push image (multi-arch)
+      env:
+        REGISTRY: ${{ secrets.ACR_LOGIN_SERVER }}
+      run: |
+        IMAGE_SHA="$REGISTRY/${{ env.IMAGE_NAME }}:${{ github.sha }}"
+        IMAGE_LATEST="$REGISTRY/${{ env.IMAGE_NAME }}:latest"
+
+        echo "IMAGE=$IMAGE_SHA" >> $GITHUB_ENV
+
+        docker buildx build \
+          --platform linux/amd64,linux/arm64 \
+          -t "$IMAGE_SHA" \
+          -t "$IMAGE_LATEST" \
+          --push .
+
+    # 4) kubecontext до AKS
     - name: Set AKS context
       uses: azure/aks-set-context@v4
       with:
         resource-group: 'kasdi-resource-group'
         cluster-name:  'kasdi-aks-production'
 
-    # --- ПОЧАТОК НОВОЇ СЕКЦІЇ ЗБІРКИ (ВИРІШЕННЯ ПРОБЛЕМИ ARM) ---
-
-    # 3. Налаштування QEMU (дозволяє збирати під ARM на звичайному сервері)
-    - name: Set up QEMU
-      uses: docker/setup-qemu-action@v3
-
-    # 4. Налаштування Docker Buildx (потужний інструмент збірки)
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-
-    # 5. Логін в Container Registry
-    - name: Login to ACR
-      uses: docker/login-action@v3
-      with:
-        registry: ${{ secrets.ACR_LOGIN_SERVER }}
-        username: ${{ secrets.ACR_USERNAME }}
-        password: ${{ secrets.ACR_PASSWORD }}
-
-    # 6. Збірка та пуш образу (Multi-arch: для Intel та ARM)
-    - name: Build and push
-      uses: docker/build-push-action@v6
-      with:
-        context: .
-        push: true
-        # Найважливіший рядок: збираємо під обидві архітектури
-        platforms: linux/amd64,linux/arm64
-        tags: |
-          ${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
-          ${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:latest
-
-    # --- КІНЕЦЬ СЕКЦІЇ ЗБІРКИ ---
-
-    # 7. Створення Namespace (якщо немає)
+    # 5) Namespace + Secret з усіма ENV
     - name: Ensure namespace
       run: kubectl get ns ${{ env.NAMESPACE }} || kubectl create ns ${{ env.NAMESPACE }}
 
-    # 8. Оновлення секретів (всі ваші ENV змінні)
-    - name: Apply app-secrets
+    - name: Apply app-secrets (all envs)
       run: |
         kubectl -n ${{ env.NAMESPACE }} delete secret app-secrets --ignore-not-found
         kubectl -n ${{ env.NAMESPACE }} create secret generic app-secrets \
@@ -85,11 +83,10 @@ jobs:
           --from-literal=LANGSMITH_API_KEY='${{ secrets.LANGSMITH_API_KEY }}' \
           --from-literal=LANGSMITH_PROJECT='${{ secrets.LANGSMITH_PROJECT }}'
 
-    # 9. Підстановка версії образу в маніфест
+    # 6) Підставляємо образ у маніфест і деплоїмо
     - name: Render image
-      run: sed -i "s|IMAGE_PLACEHOLDER|${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}|g" k8s/deployment.yaml
+      run: sed -i "s|IMAGE_PLACEHOLDER|$IMAGE|g" k8s/deployment.yaml
 
-    # 10. Деплой у Kubernetes
     - name: Deploy to AKS
       uses: azure/k8s-deploy@v5
       with:
@@ -98,6 +95,6 @@ jobs:
           k8s/namespace.yaml
           k8s/deployment.yaml
 
-    # 11. Перевірка статусу (тепер має пройти успішно!)
+    # 7) Чекаємо rollout
     - name: Rollout status
       run: kubectl -n ${{ env.NAMESPACE }} rollout status deploy/${{ env.IMAGE_NAME }} --timeout=180s
